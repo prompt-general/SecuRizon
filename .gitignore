@@ -1,0 +1,113 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below to include it)
+vendor/
+
+# Go workspace file
+go.work
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Build artifacts
+bin/
+build/
+dist/
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+tmp/
+temp/
+
+# Coverage files
+coverage.out
+coverage.html
+
+# Air live reload
+.air.toml
+tmp/
+
+# Docker
+.dockerignore
+
+# Local configuration
+config/local.yaml
+config/development.yaml
+
+# Database files
+*.db
+*.sqlite
+
+# Node.js (for future web UI)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python (for future scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Kubernetes secrets
+secrets/
+*.key
+*.crt
+*.pem
+
+# Terraform (for future IaC)
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Backup files
+*.bak
+*.backup
+
+# Profiling files
+*.prof
+*.pprof
+
+# Local development
+.local/
+local/
