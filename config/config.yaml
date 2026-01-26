@@ -1,0 +1,108 @@
+# SecuRizon Configuration File
+
+# Graph Database Configuration
+graph:
+  uri: "bolt://localhost:7687"
+  database: "neo4j"
+  username: "neo4j"
+  password: "password"
+  max_pool_size: 50
+  max_idle_conns: 10
+  conn_timeout: 30s
+  read_timeout: 30s
+  write_timeout: 30s
+
+# Event Bus Configuration
+events:
+  brokers:
+    - "localhost:9092"
+  client_id: "securizon-events"
+  consumer_group: "securizon-group"
+  batch_size: 100
+  batch_timeout: 10ms
+  commit_interval: 1s
+  heartbeat_interval: 3s
+  session_timeout: 30s
+  rebalance_timeout: 30s
+  start_offset: -1  # Latest
+  min_bytes: 1
+  max_bytes: 1048576  # 1MB
+  max_wait: 500ms
+  compression_type: "gzip"
+  security_protocol: "PLAINTEXT"
+
+# Risk Engine Configuration
+risk:
+  base_severity_weight: 1.0
+  exposure_weight: 1.0
+  environment_weight: 1.0
+  threat_intel_weight: 1.0
+  critical_threshold: 80.0
+  high_threshold: 60.0
+  medium_threshold: 40.0
+  cache_enabled: true
+  cache_ttl: 5m
+  cache_size: 10000
+  enable_propagation: true
+  propagation_depth: 3
+  decay_factor: 0.5
+  batch_size: 100
+  calculation_timeout: 30s
+  enable_metrics: true
+  metrics_interval: 60s
+
+# API Gateway Configuration
+api:
+  host: "0.0.0.0"
+  port: 8080
+  read_timeout: 30s
+  write_timeout: 30s
+  idle_timeout: 120s
+  enable_cors: true
+  allowed_origins:
+    - "*"
+  allowed_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "DELETE"
+    - "OPTIONS"
+  allowed_headers:
+    - "*"
+  enable_auth: false
+  auth_type: "jwt"
+  jwt_secret: "your-secret-key"
+  enable_metrics: true
+  enable_pprof: false
+  enable_swagger: true
+  rate_limit_enabled: false
+  rate_limit_rps: 100
+  request_timeout: 30s
+  max_request_size: 10485760  # 10MB
+
+# Logging Configuration
+logging:
+  level: "info"
+  format: "json"
+  output: "stdout"
+  file: ""
+  max_size: 100
+  max_backups: 3
+  max_age: 28
+  compress: true
+
+# Metrics Configuration
+metrics:
+  enabled: true
+  interval: 60s
+  endpoint: "/metrics"
+  prometheus:
+    enabled: true
+    port: 9090
+
+# Tracing Configuration
+tracing:
+  enabled: true
+  jaeger:
+    endpoint: "http://localhost:14268/api/traces"
+    service_name: "securizon"
