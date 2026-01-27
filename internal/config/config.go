@@ -1,173 +1,236 @@
 package config
 
 import (
-	"log"
+	"fmt"
 	"os"
 	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
-// Config represents the overall application configuration
+// Config represents the complete Securizon configuration
 type Config struct {
-	Graph   GraphConfig   `yaml:"graph"`
-	Events  EventsConfig  `yaml:"events"`
-	Risk    RiskConfig    `yaml:"risk"`
-	API     APIConfig     `yaml:"api"`
-	Logging LoggingConfig `yaml:"logging"`
-	Metrics MetricsConfig `yaml:"metrics"`
-	Tracing TracingConfig `yaml:"tracing"`
-	Kafka   KafkaConfig   `yaml:"kafka"`
+	Version      string               `yaml:"version"`
+	Collector    CollectorConfig      `yaml:"collector"`
+	AWS          AWSConfig            `yaml:"aws"`
+	Azure        AzureConfig          `yaml:"azure"`
+	GCP          GCPConfig            `yaml:"gcp"`
+	SaaS         SaaSConfig           `yaml:"saas"`
+	Kafka        KafkaConfig          `yaml:"kafka"`
+	Neo4j        Neo4jConfig          `yaml:"neo4j"`
+	Risk         RiskConfig           `yaml:"risk"`
+	Policies     PoliciesConfig       `yaml:"policies"`
+	API          APIConfig            `yaml:"api"`
+	Logging      LoggingConfig        `yaml:"logging"`
+	Metrics      MetricsConfig        `yaml:"metrics"`
+	Health       HealthConfig         `yaml:"health"`
+	Tracing      TracingConfig        `yaml:"tracing"`
+	FeatureFlags FeatureFlagsConfig   `yaml:"feature_flags"`
 }
 
-// GraphConfig represents Neo4j database configuration
-type GraphConfig struct {
-	URI            string        `yaml:"uri"`
-	Database       string        `yaml:"database"`
-	Username       string        `yaml:"username"`
-	Password       string        `yaml:"password"`
-	MaxPoolSize    int           `yaml:"max_pool_size"`
-	MaxIdleConns   int           `yaml:"max_idle_conns"`
-	ConnTimeout    time.Duration `yaml:"conn_timeout"`
-	ReadTimeout    time.Duration `yaml:"read_timeout"`
-	WriteTimeout   time.Duration `yaml:"write_timeout"`
+type CollectorConfig struct {
+	ID                       string           `yaml:"id"`
+	Mode                     string           `yaml:"mode"`
+	FullSyncInterval         string           `yaml:"full_sync_interval"`
+	EventPollInterval        string           `yaml:"event_poll_interval"`
+	MaxConcurrentCollections int              `yaml:"max_concurrent_collections"`
+	RateLimit                RateLimitConfig  `yaml:"rate_limit"`
 }
 
-// EventsConfig represents Kafka event bus configuration
-type EventsConfig struct {
-	Brokers              []string      `yaml:"brokers"`
-	ClientID             string        `yaml:"client_id"`
-	ConsumerGroup        string        `yaml:"consumer_group"`
-	BatchSize            int           `yaml:"batch_size"`
-	BatchTimeout         time.Duration `yaml:"batch_timeout"`
-	CommitInterval       time.Duration `yaml:"commit_interval"`
-	HeartbeatInterval    time.Duration `yaml:"heartbeat_interval"`
-	SessionTimeout       time.Duration `yaml:"session_timeout"`
-	RebalanceTimeout     time.Duration `yaml:"rebalance_timeout"`
-	StartOffset          int64         `yaml:"start_offset"`
-	MinBytes             int           `yaml:"min_bytes"`
-	MaxBytes             int           `yaml:"max_bytes"`
-	MaxWait              time.Duration `yaml:"max_wait"`
-	CompressionType      string        `yaml:"compression_type"`
-	SecurityProtocol     string        `yaml:"security_protocol"`
+type AWSConfig struct {
+	Enabled  bool               `yaml:"enabled"`
+	Regions  []string           `yaml:"regions"`
+	Accounts []AWSAccountConfig `yaml:"accounts"`
+	Features map[string]bool    `yaml:"features"`
 }
 
-// RiskConfig represents risk engine configuration
-type RiskConfig struct {
-	BaseSeverityWeight  float64       `yaml:"base_severity_weight"`
-	ExposureWeight      float64       `yaml:"exposure_weight"`
-	EnvironmentWeight   float64       `yaml:"environment_weight"`
-	ThreatIntelWeight   float64       `yaml:"threat_intel_weight"`
-	CriticalThreshold   float64       `yaml:"critical_threshold"`
-	HighThreshold       float64       `yaml:"high_threshold"`
-	MediumThreshold     float64       `yaml:"medium_threshold"`
-	CacheEnabled        bool          `yaml:"cache_enabled"`
-	CacheTTL            time.Duration `yaml:"cache_ttl"`
-	CacheSize           int           `yaml:"cache_size"`
-	EnablePropagation   bool          `yaml:"enable_propagation"`
-	PropagationDepth    int           `yaml:"propagation_depth"`
-	DecayFactor         float64       `yaml:"decay_factor"`
-	BatchSize           int           `yaml:"batch_size"`
-	CalculationTimeout  time.Duration `yaml:"calculation_timeout"`
-	EnableMetrics       bool          `yaml:"enable_metrics"`
-	MetricsInterval     time.Duration `yaml:"metrics_interval"`
+type AWSAccountConfig struct {
+	ID         string `yaml:"id"`
+	RoleARN    string `yaml:"role_arn"`
+	ExternalID string `yaml:"external_id"`
 }
 
-// APIConfig represents API gateway configuration
-type APIConfig struct {
-	Host              string        `yaml:"host"`
-	Port              int           `yaml:"port"`
-	ReadTimeout       time.Duration `yaml:"read_timeout"`
-	WriteTimeout      time.Duration `yaml:"write_timeout"`
-	IdleTimeout       time.Duration `yaml:"idle_timeout"`
-	EnableCORS        bool          `yaml:"enable_cors"`
-	AllowedOrigins    []string      `yaml:"allowed_origins"`
-	AllowedMethods    []string      `yaml:"allowed_methods"`
-	AllowedHeaders    []string      `yaml:"allowed_headers"`
-	EnableAuth        bool          `yaml:"enable_auth"`
-	AuthType          string        `yaml:"auth_type"`
-	JWTSecret         string        `yaml:"jwt_secret"`
-	EnableMetrics     bool          `yaml:"enable_metrics"`
-	EnablePprof       bool          `yaml:"enable_pprof"`
-	EnableSwagger     bool          `yaml:"enable_swagger"`
-	RateLimitEnabled  bool          `yaml:"rate_limit_enabled"`
-	RateLimitRPS      int           `yaml:"rate_limit_rps"`
-	RequestTimeout    time.Duration `yaml:"request_timeout"`
-	MaxRequestSize    int64         `yaml:"max_request_size"`
-}
-
-// LoggingConfig represents logging configuration
-type LoggingConfig struct {
-	Level       string `yaml:"level"`
-	Format      string `yaml:"format"`
-	Output      string `yaml:"output"`
-	File        string `yaml:"file"`
-	MaxSize     int    `yaml:"max_size"`
-	MaxBackups  int    `yaml:"max_backups"`
-	MaxAge      int    `yaml:"max_age"`
-	Compress    bool   `yaml:"compress"`
-}
-
-// MetricsConfig represents metrics configuration
-type MetricsConfig struct {
-	Enabled    bool          `yaml:"enabled"`
-	Interval   time.Duration `yaml:"interval"`
-	Endpoint   string        `yaml:"endpoint"`
-	Prometheus PrometheusConfig `yaml:"prometheus"`
-}
-
-// PrometheusConfig represents Prometheus configuration
-type PrometheusConfig struct {
+type AzureConfig struct {
 	Enabled bool `yaml:"enabled"`
-	Port    int  `yaml:"port"`
 }
 
-// TracingConfig represents tracing configuration
+type GCPConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+type SaaSConfig struct {
+	Enabled bool         `yaml:"enabled"`
+	GitHub  GitHubConfig `yaml:"github"`
+}
+
+type GitHubConfig struct {
+	Enabled       bool     `yaml:"enabled"`
+	Organizations []string `yaml:"organizations"`
+	Scopes        []string `yaml:"scopes"`
+}
+
+type KafkaConfig struct {
+	BootstrapServers []string            `yaml:"bootstrap_servers"`
+	ClientID         string              `yaml:"client_id"`
+	CompressionType  string              `yaml:"compression_type"`
+	Security         KafkaSecurityConfig `yaml:"security"`
+}
+
+type KafkaSecurityConfig struct {
+	SASLMechanism string `yaml:"sasl_mechanism"`
+	SASLUsername  string `yaml:"sasl_username"`
+	SASLPassword  string `yaml:"sasl_password"`
+	SSLEnabled    bool   `yaml:"ssl_enabled"`
+	SSLCACertPath string `yaml:"ssl_ca_cert_path"`
+}
+
+type Neo4jConfig struct {
+	URI                   string `yaml:"uri"`
+	Username              string `yaml:"username"`
+	Password              string `yaml:"password"`
+	MaxConnectionPoolSize int    `yaml:"max_connection_pool_size"`
+	Encryption            bool   `yaml:"encryption"`
+	TrustStrategy         string `yaml:"trust_strategy"`
+}
+
+type RiskConfig struct {
+	Weights               RiskWeights    `yaml:"weights"`
+	Thresholds            RiskThresholds `yaml:"thresholds"`
+	RecalculationInterval string         `yaml:"recalculation_interval"`
+}
+
+type RiskWeights struct {
+	Exposure        float64 `yaml:"exposure"`
+	Environment     float64 `yaml:"environment"`
+	ThreatIntel     float64 `yaml:"threat_intel"`
+	DataSensitivity float64 `yaml:"data_sensitivity"`
+}
+
+type RiskThresholds struct {
+	Critical int `yaml:"critical"`
+	High     int `yaml:"high"`
+	Medium   int `yaml:"medium"`
+	Low      int `yaml:"low"`
+}
+
+type PoliciesConfig struct {
+	Paths             []string `yaml:"paths"`
+	AutoRemediate     bool     `yaml:"auto_remediate"`
+	RequireApproval   bool     `yaml:"require_approval"`
+	EvaluationTimeout string   `yaml:"evaluation_timeout"`
+}
+
+type APIConfig struct {
+	Port      int             `yaml:"port"`
+	Host      string          `yaml:"host"`
+	TLS       TLSConfig       `yaml:"tls"`
+	Auth      AuthConfig      `yaml:"auth"`
+	RateLimit RateLimitConfig `yaml:"rate_limit"`
+	CORS      CORSConfig      `yaml:"cors"`
+}
+
+type TLSConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	CertFile string `yaml:"cert_file"`
+	KeyFile  string `yaml:"key_file"`
+}
+
+type AuthConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	JWKURL   string `yaml:"jwk_url"`
+	Audience string `yaml:"audience"`
+	TokenTTL string `yaml:"token_ttl"`
+}
+
+type RateLimitConfig struct {
+	RequestsPerSecond int `yaml:"requests_per_second"`
+	RequestsPerMinute int `yaml:"requests_per_minute"`
+	BurstSize         int `yaml:"burst_size"`
+}
+
+type CORSConfig struct {
+	Enabled        bool     `yaml:"enabled"`
+	AllowedOrigins []string `yaml:"allowed_origins"`
+}
+
+type LoggingConfig struct {
+	Level  string        `yaml:"level"`
+	Format string        `yaml:"format"`
+	Output string        `yaml:"output"`
+	File   FileLogConfig `yaml:"file"`
+}
+
+type FileLogConfig struct {
+	Path       string `yaml:"path"`
+	MaxSize    string `yaml:"max_size"`
+	MaxBackups int    `yaml:"max_backups"`
+	MaxAge     string `yaml:"max_age"`
+}
+
+type MetricsConfig struct {
+	Enabled      bool   `yaml:"enabled"`
+	Port         int    `yaml:"port"`
+	Path         string `yaml:"path"`
+	PushEnabled  bool   `yaml:"push_enabled"`
+	PushGateway  string `yaml:"push_gateway"`
+	PushInterval string `yaml:"push_interval"`
+}
+
+type HealthConfig struct {
+	Enabled       bool   `yaml:"enabled"`
+	Port          int    `yaml:"port"`
+	Path          string `yaml:"path"`
+	ReadinessPath string `yaml:"readiness_path"`
+	LivenessPath  string `yaml:"liveness_path"`
+}
+
 type TracingConfig struct {
 	Enabled bool         `yaml:"enabled"`
 	Jaeger  JaegerConfig `yaml:"jaeger"`
 }
 
-// JaegerConfig represents Jaeger tracing configuration
 type JaegerConfig struct {
-	Endpoint    string `yaml:"endpoint"`
-	ServiceName string `yaml:"service_name"`
+	Endpoint string        `yaml:"endpoint"`
+	Sampler  SamplerConfig `yaml:"sampler"`
 }
 
-// KafkaConfig represents Kafka producer configuration
-type KafkaConfig struct {
-	Brokers []string      `yaml:"brokers"`
-	Topic   string        `yaml:"topic"`
-	Timeout time.Duration `yaml:"timeout"`
+type SamplerConfig struct {
+	Type  string  `yaml:"type"`
+	Param float64 `yaml:"param"`
 }
 
-// Load loads configuration from file
-func Load() *Config {
-	configPath := os.Getenv("CONFIG_PATH")
-	if configPath == "" {
-		configPath = "config/config.yaml"
-	}
+type FeatureFlagsConfig struct {
+	AttackPathAnalysis            bool `yaml:"attack_path_analysis"`
+	RealTimeCorrelation           bool `yaml:"real_time_correlation"`
+	AutomatedRemediation          bool `yaml:"automated_remediation"`
+	ThreatIntelligenceIntegration bool `yaml:"threat_intelligence_integration"`
+}
 
+// Load reads and parses the configuration file
+func Load(configPath string) (*Config, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		log.Fatalf("Failed to read config file: %v", err)
+		return nil, fmt.Errorf("failed to read config file: %v", err)
 	}
 
 	cfg := &Config{}
 	if err := yaml.Unmarshal(data, cfg); err != nil {
-		log.Fatalf("Failed to parse config file: %v", err)
+		return nil, fmt.Errorf("failed to parse config file: %v", err)
 	}
 
-	// Set defaults for Kafka if not specified
-	if len(cfg.Kafka.Brokers) == 0 {
-		cfg.Kafka.Brokers = cfg.Events.Brokers
-	}
-	if cfg.Kafka.Topic == "" {
-		cfg.Kafka.Topic = "securizon-events"
-	}
-	if cfg.Kafka.Timeout == 0 {
-		cfg.Kafka.Timeout = 10 * time.Second
-	}
+	// Validate and expand environment variables
+	expandEnv(cfg)
 
-	return cfg
+	return cfg, nil
+}
+
+// expandEnv replaces ${VAR} placeholders with environment variables
+func expandEnv(cfg *Config) {
+	cfg.Kafka.Security.SASLPassword = os.ExpandEnv(cfg.Kafka.Security.SASLPassword)
+	cfg.Neo4j.Password = os.ExpandEnv(cfg.Neo4j.Password)
+}
+
+// GetDuration parses a duration string
+func GetDuration(s string) (time.Duration, error) {
+	return time.ParseDuration(s)
 }
