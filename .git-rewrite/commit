@@ -1,16 +1,16 @@
-tree 09fda6b7aabcd7a960206539d7ed97dceecc9979
-parent 340fea2ec9f35317f26ae9971859417ae62bda16
-author SecuRizon Development <calebrutto91@gmail.com> 1769417367 +0300
-committer SecuRizon Development <calebrutto91@gmail.com> 1769417367 +0300
+tree bde27f16e5fea1e9d9d8fff30e92a5ec63f1fdd5
+parent 783a68e2a25fd36c72f7aa4e751d4137785e702d
+author SecuRizon Development <calebrutto91@gmail.com> 1769423398 +0300
+committer SecuRizon Development <calebrutto91@gmail.com> 1769423398 +0300
 
-feat: implement advanced risk scoring engine models
+feat: implement GCP collector stub
 
-- Define comprehensive risk scoring algorithm with multipliers
-- Implement risk level classification and threshold management
-- Add risk trend analysis and summary statistics
-- Support for risk contributors and threat integration
-- Include risk thresholds for automated response
+- Add GCP collector main.go with project management
+- Implement event bus integration for GCP resource collection
+- Add configurable collection intervals and project support
+- Include graceful shutdown handling and error management
+- Provide foundation for GCP resource discovery
 
-This commit implements the core risk calculation logic for SecuRizon,
-providing sophisticated risk assessment capabilities that consider
-base severity, exposure, environment, and threat intelligence factors.
+This commit establishes the GCP collector framework for SecuRizon,
+enabling automated discovery and monitoring of Google Cloud Platform
+security assets with multi-project support and configurable intervals.
