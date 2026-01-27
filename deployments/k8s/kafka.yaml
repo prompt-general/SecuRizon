@@ -1,0 +1,239 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-config
+  namespace: securazion
+data:
+  sasl_jaas.conf: |
+    org.apache.kafka.common.security.scram.ScramLoginModule required
+    username="securazion"
+    password="changeme";
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  namespace: securazion
+  labels:
+    app: securazion
+    component: event-broker
+spec:
+  serviceName: kafka-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: securazion
+      component: event-broker
+  template:
+    metadata:
+      labels:
+        app: securazion
+        component: event-broker
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9308"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - securazion
+              - key: component
+                operator: In
+                values:
+                - event-broker
+            topologyKey: kubernetes.io/hostname
+      containers:
+      - name: kafka
+        image: confluentinc/cp-kafka:7.5.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 9092
+          name: client
+          protocol: TCP
+        - containerPort: 9093
+          name: controller
+          protocol: TCP
+        - containerPort: 9308
+          name: jmx-metrics
+          protocol: TCP
+        env:
+        - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+          value: "CLIENT:SASL_SSL,CONTROLLER:SASL_SSL,PLAINTEXT:PLAINTEXT"
+        - name: KAFKA_INTER_BROKER_LISTENER_NAME
+          value: "CONTROLLER"
+        - name: KAFKA_CONTROLLER_LISTENER_NAMES
+          value: "CONTROLLER"
+        - name: KAFKA_PROCESS_ROLES
+          value: "broker,controller"
+        - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+          value: "3"
+        - name: KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS
+          value: "3"
+        - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+          value: "3"
+        - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+          value: "2"
+        - name: KAFKA_LOG_RETENTION_HOURS
+          value: "168"
+        - name: KAFKA_COMPRESSION_TYPE
+          value: "snappy"
+        - name: KAFKA_NUM_NETWORK_THREADS
+          value: "8"
+        - name: KAFKA_NUM_IO_THREADS
+          value: "8"
+        - name: KAFKA_SOCKET_SEND_BUFFER_BYTES
+          value: "102400"
+        - name: KAFKA_SOCKET_RECEIVE_BUFFER_BYTES
+          value: "102400"
+        - name: KAFKA_SOCKET_REQUEST_MAX_BYTES
+          value: "104857600"
+        - name: KAFKA_JMX_PORT
+          value: "9308"
+        - name: KAFKA_JMX_HOSTNAME
+          value: "localhost"
+        - name: KAFKA_LOG4J_ROOT_LOGLEVEL
+          value: "INFO"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: KAFKA_BROKER_ID
+          value: "$(POD_NAME | sed 's/kafka-//')"
+        - name: KAFKA_NODE_ID
+          value: "$(POD_NAME | sed 's/kafka-//')"
+        - name: KAFKA_ADVERTISED_LISTENERS
+          value: "CLIENT://$(POD_NAME).kafka-headless.$(POD_NAMESPACE).svc.cluster.local:9092,CONTROLLER://$(POD_NAME).kafka-headless.$(POD_NAMESPACE).svc.cluster.local:9093"
+        - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+          value: "0@kafka-0.kafka-headless.securazion.svc.cluster.local:9093,1@kafka-1.kafka-headless.securazion.svc.cluster.local:9093,2@kafka-2.kafka-headless.securazion.svc.cluster.local:9093"
+        - name: KAFKA_BROKER_RACK
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.labels['topology.kubernetes.io/zone']
+        - name: KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL
+          value: "SCRAM-SHA-512"
+        - name: KAFKA_SASL_JAAS_CONFIG
+          valueFrom:
+            secretKeyRef:
+              name: kafka-credentials
+              key: sasl_jaas_config
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+            ephemeral-storage: "5Gi"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+            ephemeral-storage: "10Gi"
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "kafka-broker-api-versions.sh --bootstrap-server=localhost:9092 | grep ApiVersion"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "kafka-broker-api-versions.sh --bootstrap-server=localhost:9092 | grep ApiVersion"
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 2
+        volumeMounts:
+        - name: kafka-data
+          mountPath: /var/lib/kafka/data
+        - name: kafka-logs
+          mountPath: /var/log/kafka
+      terminationGracePeriodSeconds: 30
+  volumeClaimTemplates:
+  - metadata:
+      name: kafka-data
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 100Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-headless
+  namespace: securazion
+  labels:
+    app: securazion
+    component: event-broker
+spec:
+  clusterIP: None
+  selector:
+    app: securazion
+    component: event-broker
+  ports:
+  - port: 9092
+    targetPort: 9092
+    name: client
+    protocol: TCP
+  - port: 9093
+    targetPort: 9093
+    name: controller
+    protocol: TCP
+  - port: 9308
+    targetPort: 9308
+    name: jmx-metrics
+    protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: securazion
+  labels:
+    app: securazion
+    component: event-broker
+spec:
+  type: ClusterIP
+  selector:
+    app: securazion
+    component: event-broker
+  ports:
+  - port: 9092
+    targetPort: 9092
+    name: client
+    protocol: TCP
+  - port: 9308
+    targetPort: 9308
+    name: jmx-metrics
+    protocol: TCP
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: kafka-pdb
+  namespace: securazion
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: securazion
+      component: event-broker
