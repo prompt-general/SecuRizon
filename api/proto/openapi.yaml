@@ -1,0 +1,1202 @@
+openapi: 3.0.3
+info:
+  title: SecuRizon API
+  description: Real-time Security Posture and Attack Surface Management
+  version: 1.0.0
+  contact:
+    name: SecuRizon Team
+    email: api@securazion.com
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+
+servers:
+  - url: https://api.securazion.com/v1
+    description: Production API
+  - url: http://localhost:8080/v1
+    description: Development API
+
+tags:
+  - name: Assets
+    description: Asset inventory and management
+  - name: Findings
+    description: Security findings and misconfigurations
+  - name: Attack Paths
+    description: Attack path analysis and visualization
+  - name: Risk
+    description: Risk scoring and analytics
+  - name: Remediation
+    description: Remediation workflows and actions
+
+paths:
+  # === ASSETS ENDPOINTS ===
+  /assets:
+    get:
+      tags: [Assets]
+      summary: List assets with filtering
+      description: Returns paginated list of assets with advanced filtering
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/SortBy'
+        - in: query
+          name: provider
+          schema:
+            type: string
+            enum: [aws, azure, gcp, github]
+          description: Filter by cloud provider
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [compute, network, data, identity, saas]
+          description: Filter by asset type
+        - in: query
+          name: environment
+          schema:
+            type: string
+            enum: [prod, staging, dev, test]
+          description: Filter by environment
+        - in: query
+          name: risk_score_min
+          schema:
+            type: number
+            minimum: 0
+            maximum: 100
+          description: Minimum risk score
+        - in: query
+          name: internet_exposed
+          schema:
+            type: boolean
+          description: Filter by internet exposure
+      responses:
+        200:
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetListResponse'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Assets]
+      summary: Create or update an asset
+      description: Manual asset creation or update (primarily for external integrations)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetUpsertRequest'
+      responses:
+        201:
+          description: Asset created/updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetResponse'
+        400:
+          $ref: '#/components/responses/BadRequest'
+
+  /assets/{asset_id}:
+    get:
+      tags: [Assets]
+      summary: Get asset details
+      description: Returns detailed information about a specific asset
+      parameters:
+        - in: path
+          name: asset_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Asset UUID
+      responses:
+        200:
+          description: Asset details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetDetailResponse'
+        404:
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Assets]
+      summary: Delete an asset
+      description: Mark an asset as inactive (soft delete)
+      parameters:
+        - in: path
+          name: asset_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        204:
+          description: Asset deleted
+        404:
+          $ref: '#/components/responses/NotFound'
+
+  /assets/{asset_id}/relationships:
+    get:
+      tags: [Assets]
+      summary: Get asset relationships
+      description: Returns all relationships for a specific asset
+      parameters:
+        - in: path
+          name: asset_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: relationship_type
+          schema:
+            type: string
+            enum: [ASSUMES_ROLE, HAS_ACCESS_TO, CONNECTED_TO, RUNS_ON, STORES, CONTAINS, GENERATES, VIOLATES, DEPENDS_ON, OWNED_BY]
+          description: Filter by relationship type
+        - in: query
+          name: direction
+          schema:
+            type: string
+            enum: [incoming, outgoing, both]
+            default: both
+          description: Relationship direction
+      responses:
+        200:
+          description: List of relationships
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipListResponse'
+
+  # === FINDINGS ENDPOINTS ===
+  /findings:
+    get:
+      tags: [Findings]
+      summary: List findings with filtering
+      description: Returns paginated list of security findings
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/SortBy'
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [open, in_progress, resolved, exempted]
+          description: Filter by finding status
+        - in: query
+          name: severity_min
+          schema:
+            type: number
+            minimum: 0
+            maximum: 10
+          description: Minimum severity score
+        - in: query
+          name: risk_score_min
+          schema:
+            type: number
+            minimum: 0
+            maximum: 100
+          description: Minimum risk score
+        - in: query
+          name: asset_id
+          schema:
+            type: string
+            format: uuid
+          description: Filter by associated asset
+        - in: query
+          name: policy_id
+          schema:
+            type: string
+          description: Filter by policy ID
+      responses:
+        200:
+          description: List of findings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FindingListResponse'
+
+    post:
+      tags: [Findings]
+      summary: Create a finding
+      description: Manual finding creation (for external scanners or manual audits)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FindingCreateRequest'
+      responses:
+        201:
+          description: Finding created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FindingResponse'
+
+  /findings/{finding_id}:
+    get:
+      tags: [Findings]
+      summary: Get finding details
+      parameters:
+        - in: path
+          name: finding_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: Finding details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FindingDetailResponse'
+
+    patch:
+      tags: [Findings]
+      summary: Update finding
+      description: Update finding status, assignee, or add comments
+      parameters:
+        - in: path
+          name: finding_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FindingUpdateRequest'
+      responses:
+        200:
+          description: Finding updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FindingResponse'
+
+  /findings/{finding_id}/remediate:
+    post:
+      tags: [Findings, Remediation]
+      summary: Remediate a finding
+      description: Initiate remediation workflow for a finding
+      parameters:
+        - in: path
+          name: finding_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemediationRequest'
+      responses:
+        202:
+          description: Remediation initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemediationResponse'
+
+  # === ATTACK PATHS ENDPOINTS ===
+  /attack-paths:
+    get:
+      tags: [Attack Paths]
+      summary: Discover attack paths
+      description: Find attack paths between assets or from entry points to targets
+      parameters:
+        - in: query
+          name: source_id
+          schema:
+            type: string
+            format: uuid
+          description: Source asset ID (optional)
+        - in: query
+          name: target_id
+          schema:
+            type: string
+            format: uuid
+          description: Target asset ID (optional)
+        - in: query
+          name: source_type
+          schema:
+            type: string
+            enum: [internet, public, compromised]
+          description: Source type if no specific asset
+        - in: query
+          name: target_type
+          schema:
+            type: string
+            enum: [data, admin, sensitive]
+          description: Target type if no specific asset
+        - in: query
+          name: max_hops
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10
+            default: 5
+          description: Maximum path length
+        - in: query
+          name: min_risk
+          schema:
+            type: number
+            minimum: 0
+            maximum: 100
+            default: 50
+          description: Minimum path risk score
+      responses:
+        200:
+          description: List of attack paths
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttackPathListResponse'
+
+  /attack-paths/{path_id}:
+    get:
+      tags: [Attack Paths]
+      summary: Get attack path details
+      description: Returns detailed information about a specific attack path
+      parameters:
+        - in: path
+          name: path_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: Attack path details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttackPathDetailResponse'
+
+  /attack-paths/simulate:
+    post:
+      tags: [Attack Paths]
+      summary: Simulate attack path
+      description: Simulate an attack from a given starting point
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttackSimulationRequest'
+      responses:
+        200:
+          description: Simulation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttackSimulationResponse'
+
+  # === RISK ENDPOINTS ===
+  /risk/dashboard:
+    get:
+      tags: [Risk]
+      summary: Get risk dashboard
+      description: Returns aggregated risk metrics for dashboard
+      responses:
+        200:
+          description: Risk dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskDashboardResponse'
+
+  /risk/trends:
+    get:
+      tags: [Risk]
+      summary: Get risk trends
+      description: Returns risk trends over time
+      parameters:
+        - in: query
+          name: timeframe
+          schema:
+            type: string
+            enum: [24h, 7d, 30d, 90d]
+            default: 7d
+          description: Timeframe for trends
+      responses:
+        200:
+          description: Risk trend data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskTrendResponse'
+
+  # === REMEDIATION ENDPOINTS ===
+  /remediation/playbooks:
+    get:
+      tags: [Remediation]
+      summary: List remediation playbooks
+      description: Returns available remediation playbooks
+      responses:
+        200:
+          description: List of playbooks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybookListResponse'
+
+    post:
+      tags: [Remediation]
+      summary: Create remediation playbook
+      description: Create a new remediation playbook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlaybookCreateRequest'
+      responses:
+        201:
+          description: Playbook created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybookResponse'
+
+  /remediation/actions:
+    get:
+      tags: [Remediation]
+      summary: List remediation actions
+      description: Returns remediation actions with filtering
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, approved, executing, completed, failed, cancelled]
+      responses:
+        200:
+          description: List of remediation actions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemediationActionListResponse'
+
+  # === WEBHOOKS ===
+  /webhooks:
+    post:
+      tags: [Integration]
+      summary: Create webhook
+      description: Create a webhook for receiving SecuRizon events
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookCreateRequest'
+      responses:
+        201:
+          description: Webhook created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+
+  /webhooks/{webhook_id}:
+    delete:
+      tags: [Integration]
+      summary: Delete webhook
+      description: Delete a webhook
+      parameters:
+        - in: path
+          name: webhook_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        204:
+          description: Webhook deleted
+
+# === COMPONENTS ===
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  parameters:
+    Page:
+      in: query
+      name: page
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: Page number
+    Limit:
+      in: query
+      name: limit
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+      description: Items per page
+    SortBy:
+      in: query
+      name: sort_by
+      schema:
+        type: string
+        default: "-risk_score"
+      description: Sort field (prefix with - for descending)
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    # Base schemas
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        code:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        pages:
+          type: integer
+
+    # Asset schemas
+    AssetUpsertRequest:
+      type: object
+      required: [provider, type, external_id]
+      properties:
+        provider:
+          type: string
+        type:
+          type: string
+        external_id:
+          type: string
+        properties:
+          type: object
+          additionalProperties: true
+        tags:
+          type: object
+          additionalProperties: true
+        environment:
+          type: string
+
+    AssetResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        external_id:
+          type: string
+        provider:
+          type: string
+        type:
+          type: string
+        risk_score:
+          type: number
+        environment:
+          type: string
+        internet_exposed:
+          type: boolean
+        discovered_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AssetDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/AssetResponse'
+        - type: object
+          properties:
+            properties:
+              type: object
+              additionalProperties: true
+            tags:
+              type: object
+              additionalProperties: true
+            findings_count:
+              type: object
+              properties:
+                critical:
+                  type: integer
+                high:
+                  type: integer
+                medium:
+                  type: integer
+                low:
+                  type: integer
+
+    AssetListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssetResponse'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+        filters:
+          type: object
+          properties:
+            total_assets:
+              type: integer
+            total_risk_score:
+              type: number
+            by_provider:
+              type: object
+              additionalProperties:
+                type: integer
+            by_type:
+              type: object
+              additionalProperties:
+                type: integer
+
+    RelationshipListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Relationship'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    Relationship:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        source_id:
+          type: string
+          format: uuid
+        target_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+        properties:
+          type: object
+          additionalProperties: true
+
+    # Finding schemas
+    FindingCreateRequest:
+      type: object
+      required: [asset_id, policy_id, severity, title]
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        policy_id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        severity:
+          type: number
+          minimum: 0
+          maximum: 10
+        evidence:
+          type: object
+          additionalProperties: true
+
+    FindingUpdateRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [open, in_progress, resolved, exempted]
+        assignee:
+          type: string
+        comment:
+          type: string
+
+    FindingResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        asset_id:
+          type: string
+          format: uuid
+        policy_id:
+          type: string
+        title:
+          type: string
+        severity:
+          type: number
+        risk_score:
+          type: number
+        status:
+          type: string
+        first_seen:
+          type: string
+          format: date-time
+        last_seen:
+          type: string
+          format: date-time
+
+    FindingDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/FindingResponse'
+        - type: object
+          properties:
+            description:
+              type: string
+            recommendation:
+              type: string
+            evidence:
+              type: object
+              additionalProperties: true
+            remediation:
+              $ref: '#/components/schemas/RemediationInfo'
+            asset_details:
+              $ref: '#/components/schemas/AssetResponse'
+
+    FindingListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FindingResponse'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+        summary:
+          type: object
+          properties:
+            total_findings:
+              type: integer
+            by_severity:
+              type: object
+              properties:
+                critical:
+                  type: integer
+                high:
+                  type: integer
+                medium:
+                  type: integer
+                low:
+                  type: integer
+            by_status:
+              type: object
+              additionalProperties:
+                type: integer
+
+    RemediationInfo:
+      type: object
+      properties:
+        steps:
+          type: array
+          items:
+            type: object
+            properties:
+              action:
+                type: string
+              script:
+                type: string
+        automated:
+          type: boolean
+        playbook:
+          type: string
+
+    # Attack Path schemas
+    AttackPath:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        source_id:
+          type: string
+          format: uuid
+        target_id:
+          type: string
+          format: uuid
+        hops:
+          type: integer
+        cumulative_risk:
+          type: number
+        path:
+          type: array
+          items:
+            $ref: '#/components/schemas/PathNode'
+        vulnerabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/PathVulnerability'
+
+    AttackPathDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/AttackPath'
+        - type: object
+          properties:
+            created_at:
+              type: string
+              format: date-time
+            updated_at:
+              type: string
+              format: date-time
+            recommendations:
+              type: array
+              items:
+                type: string
+
+    PathNode:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+        risk_score:
+          type: number
+        role:
+          type: string
+          enum: [entry_point, pivot_point, target]
+        details:
+          type: object
+          additionalProperties: true
+
+    PathVulnerability:
+      type: object
+      properties:
+        finding_id:
+          type: string
+          format: uuid
+        severity:
+          type: number
+        exploited_in_path:
+          type: boolean
+        description:
+          type: string
+
+    AttackPathListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttackPath'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    AttackSimulationRequest:
+      type: object
+      required: [source_id, target_id]
+      properties:
+        source_id:
+          type: string
+          format: uuid
+        target_id:
+          type: string
+          format: uuid
+        include_recommendations:
+          type: boolean
+          default: true
+
+    AttackSimulationResponse:
+      type: object
+      properties:
+        paths:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttackPath'
+        risk_summary:
+          type: object
+          properties:
+            highest_risk:
+              type: number
+            average_risk:
+              type: number
+            critical_paths:
+              type: integer
+        recommendations:
+          type: array
+          items:
+            type: string
+
+    # Risk schemas
+    RiskDashboardResponse:
+      type: object
+      properties:
+        summary:
+          type: object
+          properties:
+            total_assets:
+              type: integer
+            total_risk_score:
+              type: number
+            avg_risk_score:
+              type: number
+            internet_exposed_assets:
+              type: integer
+        top_risks:
+          type: array
+          items:
+            $ref: '#/components/schemas/TopRisk'
+        by_provider:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderRisk'
+        trend_7d:
+          type: array
+          items:
+            $ref: '#/components/schemas/RiskTrendPoint'
+
+    TopRisk:
+      type: object
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        asset_type:
+          type: string
+        risk_score:
+          type: number
+        findings_count:
+          type: integer
+
+    ProviderRisk:
+      type: object
+      properties:
+        provider:
+          type: string
+        asset_count:
+          type: integer
+        avg_risk:
+          type: number
+        high_risk_assets:
+          type: integer
+
+    RiskTrendPoint:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        total_risk:
+          type: number
+        assets_count:
+          type: integer
+        critical_findings:
+          type: integer
+
+    RiskTrendResponse:
+      type: object
+      properties:
+        timeframe:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RiskTrendPoint'
+        summary:
+          type: object
+          properties:
+            current_risk:
+              type: number
+            peak_risk:
+              type: number
+            trend:
+              type: string
+              enum: [up, down, stable]
+
+    # Remediation schemas
+    RemediationRequest:
+      type: object
+      properties:
+        playbook_id:
+          type: string
+          format: uuid
+        auto_approve:
+          type: boolean
+          default: false
+
+    RemediationResponse:
+      type: object
+      properties:
+        action_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    PlaybookCreateRequest:
+      type: object
+      required: [name, steps]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        steps:
+          type: array
+          items:
+            type: object
+            properties:
+              action:
+                type: string
+              script:
+                type: string
+              timeout:
+                type: integer
+
+    PlaybookResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        steps:
+          type: array
+          items:
+            type: object
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PlaybookListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlaybookResponse'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    RemediationActionListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              finding_id:
+                type: string
+                format: uuid
+              playbook_id:
+                type: string
+                format: uuid
+              status:
+                type: string
+              created_at:
+                type: string
+                format: date-time
+              completed_at:
+                type: string
+                format: date-time
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    # Webhook schemas
+    WebhookCreateRequest:
+      type: object
+      required: [url, events]
+      properties:
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+            enum: [asset.created, asset.updated, finding.created, attack_path.discovered, remediation.completed]
+        active:
+          type: boolean
+          default: true
+
+    WebhookResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+        events:
+          type: array
+          items:
+            type: string
+        active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        last_triggered:
+          type: string
+          format: date-time
