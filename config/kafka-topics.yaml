@@ -1,0 +1,86 @@
+# Kafka Topic Structure for Securizon Event Processing Pipeline
+
+kafka_topics:
+  # Raw events from collectors (partitioned by region/account)
+  raw.aws.events:
+    partitions: 12
+    retention: 7d
+    cleanup.policy: delete
+  
+  raw.azure.events:
+    partitions: 8
+    retention: 7d
+    cleanup.policy: delete
+  
+  raw.gcp.events:
+    partitions: 8
+    retention: 7d
+    cleanup.policy: delete
+  
+  # Normalized events
+  asset.upserts:
+    partitions: 16
+    retention: 30d
+    cleanup.policy: delete
+    key: asset_id
+  
+  asset.relationships:
+    partitions: 16
+    retention: 30d
+    cleanup.policy: delete
+    key: source_id
+  
+  security.events:
+    partitions: 24
+    retention: 14d
+    cleanup.policy: delete
+    key: resource_id
+  
+  # Findings and alerts
+  findings:
+    partitions: 12
+    retention: 90d
+    cleanup.policy: delete
+    key: finding_id
+  
+  alerts:
+    partitions: 8
+    retention: 30d
+    cleanup.policy: delete
+    key: alert_id
+  
+  # Attack paths
+  attackpaths:
+    partitions: 8
+    retention: 30d
+    cleanup.policy: delete
+  
+  # Dead letter queue
+  events.dlq:
+    partitions: 4
+    retention: 30d
+    cleanup.policy: delete
+  
+  # Metrics and telemetry
+  metrics:
+    partitions: 4
+    retention: 7d
+    cleanup.policy: delete
+  
+  # Remediation actions
+  remediation.requests:
+    partitions: 8
+    retention: 7d
+    cleanup.policy: delete
+  
+  remediation.results:
+    partitions: 8
+    retention: 30d
+    cleanup.policy: delete
+
+# Topic configuration guidelines:
+# - partition_count: Higher for topics with high throughput (security.events, asset.upserts)
+# - retention_time: Shorter for raw events, longer for findings/audit trail
+# - cleanup.policy: 'delete' removes messages after retention period
+# - key: Used for partitioning related events together (asset_id, resource_id, etc.)
+# - replication_factor: Should be set to 3 for production
