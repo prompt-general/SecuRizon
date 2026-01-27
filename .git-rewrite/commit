@@ -1,0 +1,16 @@
+tree 09fda6b7aabcd7a960206539d7ed97dceecc9979
+parent 340fea2ec9f35317f26ae9971859417ae62bda16
+author SecuRizon Development <calebrutto91@gmail.com> 1769417367 +0300
+committer SecuRizon Development <calebrutto91@gmail.com> 1769417367 +0300
+
+feat: implement advanced risk scoring engine models
+
+- Define comprehensive risk scoring algorithm with multipliers
+- Implement risk level classification and threshold management
+- Add risk trend analysis and summary statistics
+- Support for risk contributors and threat integration
+- Include risk thresholds for automated response
+
+This commit implements the core risk calculation logic for SecuRizon,
+providing sophisticated risk assessment capabilities that consider
+base severity, exposure, environment, and threat intelligence factors.
