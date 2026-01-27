@@ -1,0 +1,118 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: securazion-api
+  namespace: securazion
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://securazion.com,https://app.securazion.com"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - api.securazion.com
+    secretName: securazion-api-tls
+  rules:
+  - host: api.securazion.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-gateway
+            port:
+              number: 8080
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@securazion.com
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+---
+apiVersion: v1
+kind: ServiceMonitor
+metadata:
+  name: securazion-services
+  namespace: securazion
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: securazion
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+---
+apiVersion: v1
+kind: PrometheusRule
+metadata:
+  name: securazion-alerts
+  namespace: securazion
+spec:
+  groups:
+  - name: securazion.rules
+    interval: 30s
+    rules:
+    - alert: EventProcessorHighLatency
+      expr: histogram_quantile(0.99, rate(securazion_event_processing_duration_seconds_bucket[5m])) > 1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Event processor high latency"
+        description: "99th percentile event processing latency > 1s"
+    
+    - alert: KafkaConsumerLag
+      expr: securazion_kafka_consumer_lag > 10000
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "High Kafka consumer lag"
+        description: "Consumer lag exceeds 10k messages. Current value: {{ $value }}"
+    
+    - alert: APIGatewayErrorRate
+      expr: rate(securazion_api_requests_total{status=~"5.."}[5m]) > 0.01
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "API gateway high error rate"
+        description: "Error rate > 1% for last 5 minutes"
+    
+    - alert: Neo4jDiskSpace
+      expr: node_filesystem_avail_bytes{mountpoint="/var/lib/neo4j/data"} / node_filesystem_size_bytes{mountpoint="/var/lib/neo4j/data"} < 0.1
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Neo4j disk space critical"
+        description: "Less than 10% disk space available"
+    
+    - alert: PodMemoryUsage
+      expr: container_memory_usage_bytes{pod=~"securazion.*"} / container_spec_memory_limit_bytes > 0.9
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Pod memory usage high"
+        description: "Memory usage > 90% on pod {{ $labels.pod }}"
