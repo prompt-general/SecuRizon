@@ -1,0 +1,54 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: securazion
+
+commonLabels:
+  app: securazion
+
+commonAnnotations:
+  managed-by: kustomize
+
+resources:
+- aws-collector.yaml
+- event-processor.yaml
+- api-gateway.yaml
+- neo4j.yaml
+- kafka.yaml
+
+configMapGenerator:
+- name: securazion-config
+  files:
+  - config/default.yaml
+  behavior: merge
+
+secretGenerator:
+- name: aws-credentials
+  env: config/.env.aws
+  behavior: merge
+- name: neo4j-credentials
+  env: config/.env.neo4j
+  behavior: merge
+- name: kafka-credentials
+  env: config/.env.kafka
+  behavior: merge
+
+patches:
+- target:
+    kind: Deployment
+  patch: |-
+    - op: replace
+      path: /spec/template/spec/securityContext/fsGroup
+      value: 1000
+    - op: replace
+      path: /spec/template/spec/securityContext/runAsUser
+      value: 1000
+
+vars:
+- name: KAFKA_BOOTSTRAP_SERVERS
+  objref:
+    kind: ConfigMap
+    name: securazion-config
+    apiVersion: v1
+  fieldref:
+    fieldpath: data.kafka_servers

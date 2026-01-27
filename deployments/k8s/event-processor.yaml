@@ -1,0 +1,286 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: event-processor
+  namespace: securazion
+  labels:
+    app: securazion
+    component: processor
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: securazion
+      component: processor
+  template:
+    metadata:
+      labels:
+        app: securazion
+        component: processor
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: event-processor-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - securazion
+                - key: component
+                  operator: In
+                  values:
+                  - processor
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: processor
+        image: securazion/event-processor:1.0.0
+        imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+              - ALL
+        ports:
+        - containerPort: 9090
+          name: metrics
+          protocol: TCP
+        - containerPort: 8081
+          name: health
+          protocol: TCP
+        env:
+        - name: WORKER_COUNT
+          value: "4"
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "kafka-0.kafka-headless.securazion.svc.cluster.local:9092,kafka-1.kafka-headless.securazion.svc.cluster.local:9092,kafka-2.kafka-headless.securazion.svc.cluster.local:9092"
+        - name: NEO4J_URI
+          value: "bolt://neo4j.securazion.svc.cluster.local:7687"
+        - name: NEO4J_USER
+          valueFrom:
+            secretKeyRef:
+              name: neo4j-credentials
+              key: username
+        - name: NEO4J_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: neo4j-credentials
+              key: password
+        - name: KAFKA_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: kafka-credentials
+              key: password
+        envFrom:
+        - configMapRef:
+            name: event-processor-config
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+            ephemeral-storage: "2Gi"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+            ephemeral-storage: "4Gi"
+        livenessProbe:
+          httpGet:
+            path: /live
+            port: health
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: health
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/securazion
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /var/cache/securazion
+      volumes:
+      - name: config-volume
+        configMap:
+          name: event-processor-config
+          defaultMode: 0644
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir:
+          sizeLimit: 500Mi
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: event-processor-sa
+  namespace: securazion
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: event-processor-role
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: event-processor-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: event-processor-role
+subjects:
+- kind: ServiceAccount
+  name: event-processor-sa
+  namespace: securazion
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: event-processor
+  namespace: securazion
+  labels:
+    app: securazion
+    component: processor
+spec:
+  type: ClusterIP
+  selector:
+    app: securazion
+    component: processor
+  ports:
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  - name: health
+    port: 8081
+    targetPort: 8081
+    protocol: TCP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: event-processor-config
+  namespace: securazion
+data:
+  config.yaml: |
+    version: 1.0
+    
+    kafka:
+      client_id: "event-processor"
+      compression_type: "snappy"
+    
+    neo4j:
+      max_connection_pool_size: 50
+      encryption: true
+      trust_strategy: "TRUST_ALL_CERTIFICATES"
+    
+    risk:
+      weights:
+        exposure: 1.2
+        environment: 1.0
+        threat_intel: 1.5
+        data_sensitivity: 1.3
+      thresholds:
+        critical: 80
+        high: 60
+        medium: 40
+        low: 20
+      recalculation_interval: "6h"
+    
+    policies:
+      auto_remediate: false
+      require_approval: true
+      evaluation_timeout: "30s"
+    
+    logging:
+      level: "info"
+      format: "json"
+      output: "stdout"
+    
+    metrics:
+      enabled: true
+      port: 9090
+      path: "/metrics"
+    
+    health:
+      enabled: true
+      port: 8081
+    
+    feature_flags:
+      attack_path_analysis: true
+      real_time_correlation: true
+      automated_remediation: false
+      threat_intelligence_integration: true
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: event-processor-hpa
+  namespace: securazion
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: event-processor
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 85
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: event-processor-pdb
+  namespace: securazion
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: securazion
+      component: processor
