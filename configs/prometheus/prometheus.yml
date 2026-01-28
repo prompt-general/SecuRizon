@@ -1,0 +1,41 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alerts.yml"
+
+scrape_configs:
+  - job_name: 'securazion-api'
+    static_configs:
+      - targets: ['api-service:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    
+  - job_name: 'securazion-collectors'
+    static_configs:
+      - targets: 
+        - 'aws-collector:9090'
+        - 'azure-collector:9090'
+        - 'gcp-collector:9090'
+    scrape_interval: 30s
+    
+  - job_name: 'securazion-event-processor'
+    static_configs:
+      - targets: ['event-processor:9090']
+    scrape_interval: 10s
+    
+  - job_name: 'securazion-remediation'
+    static_configs:
+      - targets: ['remediation-engine:9090']
+    scrape_interval: 10s
+    
+  - job_name: 'neo4j'
+    static_configs:
+      - targets: ['neo4j:2004']
+    scrape_interval: 30s
+    
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka-exporter:9308']
+    scrape_interval: 30s
