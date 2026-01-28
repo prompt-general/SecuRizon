@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentd-config
+  namespace: logging
+data:
+  fluent.conf: |
+    <source>
+      @type forward
+      port 24224
+      bind 0.0.0.0
+    </source>
+    
+    <filter securazion.**>
+      @type parser
+      key_name log
+      reserve_data true
+      <parse>
+        @type json
+        time_key timestamp
+        time_type string
+        time_format "%Y-%m-%dT%H:%M:%S.%NZ"
+      </parse>
+    </filter>
+    
+    <match securazion.api>
+      @type elasticsearch
+      host elasticsearch.logging.svc.cluster.local
+      port 9200
+      logstash_format true
+      logstash_prefix securazion-api
+      buffer_chunk_limit 1M
+      buffer_queue_limit 32
+      flush_interval 5s
+      retry_limit 17
+      retry_wait 1.0
+      num_threads 8
+    </match>
+    
+    <match securazion.collector.**>
+      @type elasticsearch
+      host elasticsearch.logging.svc.cluster.local
+      port 9200
+      logstash_format true
+      logstash_prefix securazion-collector
+      buffer_chunk_limit 2M
+      buffer_queue_limit 32
+      flush_interval 10s
+    </match>
+    
+    <match securazion.remediation.**>
+      @type elasticsearch
+      host elasticsearch.logging.svc.cluster.local
+      port 9200
+      logstash_format true
+      logstash_prefix securazion-remediation
+      buffer_chunk_limit 1M
+      buffer_queue_limit 32
+      flush_interval 5s
+    </match>
