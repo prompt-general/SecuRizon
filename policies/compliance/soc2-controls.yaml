@@ -1,0 +1,101 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: securazion-soc2-controls
+spec:
+  background: true
+  rules:
+    # CC6.1 - Logical Access Security
+    - name: require-nonroot-containers
+      match:
+        resources:
+          kinds:
+            - Pod
+      validate:
+        message: "Containers must not run as root for SOC2 CC6.1 compliance"
+        pattern:
+          spec:
+            securityContext:
+              runAsNonRoot: true
+            containers:
+              - =(securityContext):
+                  =(runAsNonRoot): true
+                  
+    # CC6.3 - Identification and Authentication
+    - name: require-service-account
+      match:
+        resources:
+          kinds:
+            - Pod
+      validate:
+        message: "Pods must use service accounts for SOC2 CC6.3 compliance"
+        pattern:
+          spec:
+            serviceAccountName: "?*"
+            
+    # CC6.6 - Audit Logging
+    - name: require-audit-labels
+      match:
+        resources:
+          kinds:
+            - Deployment
+            - Service
+            - ConfigMap
+            - Secret
+      validate:
+        message: "Resources must have audit labels for SOC2 CC6.6 compliance"
+        pattern:
+          metadata:
+            labels:
+              audit-id: "?*"
+              created-by: "?*"
+              
+    # CC7.1 - System Change Management
+    - name: require-version-labels
+      match:
+        resources:
+          kinds:
+            - Deployment
+      validate:
+        message: "Deployments must have version labels for SOC2 CC7.1 compliance"
+        pattern:
+          metadata:
+            labels:
+              version: "?*"
+          spec:
+            template:
+              metadata:
+                labels:
+                  version: "?*"
+                  
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: securazion-audit-config
+  namespace: securazion-production
+data:
+  audit-policy.yaml: |
+    apiVersion: audit.k8s.io/v1
+    kind: Policy
+    rules:
+      - level: Metadata
+        resources:
+          - group: ""
+            resources: ["secrets", "configmaps"]
+        namespaces: ["securazion-production"]
+        
+      - level: RequestResponse
+        resources:
+          - group: ""
+            resources: ["pods", "deployments", "services"]
+        namespaces: ["securazion-production"]
+        
+      - level: Request
+        resources:
+          - group: "rbac.authorization.k8s.io"
+            resources: ["clusterroles", "clusterrolebindings"]
+            
+      - level: Metadata
+        omitStages:
+          - "RequestReceived"
