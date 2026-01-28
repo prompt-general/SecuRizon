@@ -1,0 +1,43 @@
+{
+  "dashboard": {
+    "title": "SecuRizon - Security Posture Dashboard",
+    "panels": [
+      {
+        "title": "Real-time Risk Score",
+        "type": "stat",
+        "targets": [{
+          "expr": "securazion_risk_total_score",
+          "legendFormat": "{{tenant}}"
+        }]
+      },
+      {
+        "title": "Findings by Severity",
+        "type": "piechart",
+        "targets": [{
+          "expr": "sum by (severity) (securazion_findings_total)"
+        }]
+      },
+      {
+        "title": "Remediation Success Rate",
+        "type": "gauge",
+        "targets": [{
+          "expr": "rate(securazion_remediation_success_total[5m]) / rate(securazion_remediation_total[5m]) * 100"
+        }]
+      },
+      {
+        "title": "Event Processing Latency",
+        "type": "heatmap",
+        "targets": [{
+          "expr": "histogram_quantile(0.95, sum(rate(securazion_event_processing_duration_seconds_bucket[5m])) by (le, processor))"
+        }]
+      },
+      {
+        "title": "Attack Path Discovery Rate",
+        "type": "graph",
+        "targets": [{
+          "expr": "rate(securazion_attack_paths_discovered_total[5m])"
+        }]
+      }
+    ]
+  }
+}
