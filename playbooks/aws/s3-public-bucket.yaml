@@ -1,0 +1,115 @@
+id: aws-s3-public-bucket-remediation
+name: "Remediate Public S3 Bucket"
+description: "Make a public S3 bucket private and enable logging"
+version: "1.0.0"
+provider: aws
+resource_type: s3_bucket
+enabled: true
+approval_required: true
+priority: 1
+dry_run: false
+rollback_enabled: true
+timeout: 300  # seconds
+max_retries: 3
+tags:
+  - s3
+  - public-access
+  - cis
+
+parameters:
+  - name: bucket_name
+    type: string
+    required: true
+    description: "Name of the S3 bucket"
+    validation: "^[a-z0-9.-]{3,63}$"
+  - name: region
+    type: string
+    required: true
+    description: "AWS region"
+    default: "us-east-1"
+  - name: log_bucket
+    type: string
+    required: false
+    description: "Bucket for access logs"
+  - name: dry_run
+    type: boolean
+    required: false
+    description: "Perform dry run only"
+    default: false
+
+steps:
+  - name: "Check current bucket ACL"
+    action: "aws:s3:get-bucket-acl"
+    condition: "{{.dry_run}} == false"
+    inputs:
+      bucket: "{{.bucket_name}}"
+    outputs:
+      - name: original_acl
+        path: "$.Grants"
+        
+  - name: "Make bucket private"
+    action: "aws:s3:put-bucket-acl"
+    condition: "{{.dry_run}} == false"
+    inputs:
+      bucket: "{{.bucket_name}}"
+      acl: "private"
+    rollback:
+      action: "aws:s3:put-bucket-acl"
+      inputs:
+        bucket: "{{.bucket_name}}"
+        acl: "{{.original_acl}}"
+        
+  - name: "Disable public access block"
+    action: "aws:s3:put-public-access-block"
+    condition: "{{.dry_run}} == false"
+    inputs:
+      bucket: "{{.bucket_name}}"
+      public_access_block_configuration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+        
+  - name: "Enable bucket logging"
+    action: "aws:s3:put-bucket-logging"
+    condition: "{{.dry_run}} == false and {{.log_bucket}} != ''"
+    inputs:
+      bucket: "{{.bucket_name}}"
+      bucket_logging_status:
+        LoggingEnabled:
+          TargetBucket: "{{.log_bucket}}"
+          TargetPrefix: "logs/{{.bucket_name}}/"
+          
+  - name: "Verify remediation"
+    action: "verify:s3-bucket-private"
+    condition: "{{.dry_run}} == false"
+    inputs:
+      bucket: "{{.bucket_name}}"
+    timeout: 30
+    
+notifications:
+  on_success:
+    - type: "slack"
+      channel: "#security-remediation"
+      template: "Remediated public S3 bucket {{.bucket_name}}"
+    - type: "email"
+      recipients:
+        - "security-team@company.com"
+  on_failure:
+    - type: "pagerduty"
+      severity: "critical"
+      template: "Failed to remediate public S3 bucket {{.bucket_name}}"
+      
+approval_policy: |
+  {
+    "require_approvers": 1,
+    "approver_groups": ["security-admins", "cloud-admins"],
+    "escalation_timeout": 3600,
+    "auto_approve_after": 7200
+  }
+
+metadata:
+  cis_control: "CIS AWS 2.1.1"
+  risk_level: "high"
+  estimated_duration: "2m"
+  last_tested: "2024-01-15"
