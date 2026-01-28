@@ -8,6 +8,7 @@ require (
 	github.com/rs/cors v1.9.0
 	github.com/segmentio/kafka-go v0.4.47
 	github.com/google/uuid v1.3.0
+	github.com/stripe/stripe-go/v74 v74.30.0
 )
 
 require (

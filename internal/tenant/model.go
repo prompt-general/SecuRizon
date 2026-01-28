@@ -64,7 +64,13 @@ const (
 )
 
 // Placeholder structs for Subscription, Billing, Contact, and User
-type SubscriptionInfo struct{}
+type SubscriptionInfo struct {
+	StripeSubscriptionID string    `json:"stripe_subscription_id"`
+	Status               string    `json:"status"`
+	CurrentPeriodStart   time.Time `json:"current_period_start"`
+	CurrentPeriodEnd     time.Time `json:"current_period_end"`
+	CancelAtPeriodEnd    bool      `json:"cancel_at_period_end"`
+}
 type BillingInfo struct{}
 type ContactInfo struct{}
 type User struct {
