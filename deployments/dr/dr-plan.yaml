@@ -1,0 +1,105 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: securazion-dr-plan
+  namespace: securazion-production
+data:
+  dr-plan.md: |
+    # SecuRizon Disaster Recovery Plan
+    
+    ## Recovery Time Objective (RTO)
+    - Critical Services: 30 minutes
+    - Non-critical Services: 4 hours
+    - Full Recovery: 24 hours
+    
+    ## Recovery Point Objective (RPO)
+    - Neo4j Database: 5 minutes
+    - Kafka Data: 2 minutes
+    - Configuration: 0 minutes (stored in Git)
+    
+    ## Recovery Procedures
+    
+    ### Level 1: Regional Failure
+    1. **Detection**
+       - Monitor CloudWatch alarms for region health
+       - Check Global Accelerator health checks
+       - Verify service endpoints in secondary region
+       
+    2. **Failover**
+       ```bash
+       # Update Global Accelerator weights
+       aws globalaccelerator update-endpoint-group \
+         --endpoint-group-arn arn:aws:globalaccelerator::123456789012:accelerator/xxx:endpoint-group/yyy \
+         --endpoint-configurations endpointId=SECONDARY_NLB_ARN,weight=100
+         
+       # Update Route53 DNS
+       aws route53 change-resource-record-sets \
+         --hosted-zone-id ZONE_ID \
+         --change-batch file://dr-route53.json
+       ```
+       
+    3. **Database Promotion**
+       ```bash
+       # Promote secondary database cluster
+       aws rds promote-read-replica \
+         --db-instance-identifier securazion-neo4j-secondary
+         
+       # Update application configuration
+       kubectl set env deployment/securazion-api \
+         NEO4J_URI=bolt://neo4j-secondary:7687
+       ```
+       
+    4. **Kafka Recovery**
+       ```bash
+       # Start Kafka in secondary region
+       kubectl apply -f kafka-secondary.yaml
+       
+       # Restore from backup
+       ./scripts/restore-kafka-backup.sh secondary
+       ```
+    
+    ### Level 2: Complete AWS Failure
+    1. **Deploy to Azure/GCP**
+    2. **Restore from cross-cloud backups**
+    3. **Update DNS globally**
+    
+    ## Backup Procedures
+    
+    ### Neo4j Backup
+    ```bash
+    # Daily full backup
+    neo4j-admin backup \
+      --from=bolt://neo4j-primary:7687 \
+      --backup-dir=/backups/neo4j/full/$(date +%Y%m%d) \
+      --name=securazion-full \
+      --check-consistency=true
+      
+    # Continuous incremental backup
+    neo4j-admin incremental-backup \
+      --from=bolt://neo4j-primary:7687 \
+      --backup-dir=/backups/neo4j/incremental \
+      --name=securazion-incr
+    ```
+    
+    ### Kafka Backup
+    ```bash
+    # MirrorMaker to backup cluster
+    kafka-mirror-maker \
+      --consumer.config consumer.properties \
+      --producer.config producer-backup.properties \
+      --whitelist=".*"
+      
+    # Export topics to S3
+    kafka-connect-s3 \
+      --config connect-s3-backup.properties
+    ```
+    
+    ### Configuration Backup
+    - All configuration stored in Git
+    - Terraform state in S3 with versioning
+    - Helm charts in Helm repository
+    
+    ## Testing Schedule
+    - Monthly: Failover test to secondary region
+    - Quarterly: Complete DR drill with team
+    - Annually: Full-scale disaster recovery exercise
