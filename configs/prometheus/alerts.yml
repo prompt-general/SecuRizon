@@ -1,0 +1,68 @@
+groups:
+  - name: securazion-alerts
+    rules:
+      - alert: HighRiskFindingsSpike
+        expr: |
+          increase(securazion_findings_total{severity="critical"}[5m]) > 10
+        for: 2m
+        labels:
+          severity: critical
+          team: security
+        annotations:
+          summary: "Spike in critical findings detected"
+          description: "{{ $value }} critical findings discovered in the last 5 minutes"
+          
+      - alert: RemediationFailureRateHigh
+        expr: |
+          rate(securazion_remediation_failed_total[10m]) / rate(securazion_remediation_total[10m]) * 100 > 20
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High remediation failure rate"
+          description: "Remediation failure rate is {{ $value }}%"
+          
+      - alert: EventProcessingLatencyHigh
+        expr: |
+          histogram_quantile(0.95, rate(securazion_event_processing_duration_seconds_bucket[5m])) > 30
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High event processing latency"
+          description: "95th percentile event processing latency is {{ $value }} seconds"
+          
+      - alert: CollectorHealthDegraded
+        expr: |
+          up{job=~"securazion-collector-.*"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Collector {{ $labels.instance }} is down"
+          description: "Collector has been down for more than 2 minutes"
+          
+      - alert: GraphDatabasePerformance
+        expr: |
+          neo4j_database_transaction_peak_concurrent > 100
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High concurrent transactions in Neo4j"
+          description: "{{ $value }} concurrent transactions detected"
+          
+      - alert: KafkaLagHigh
+        expr: |
+          kafka_consumer_group_lag > 10000
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High Kafka consumer lag"
+          description: "Consumer lag is {{ $value }} messages"
