@@ -9,6 +9,8 @@ require (
 	github.com/segmentio/kafka-go v0.4.47
 	github.com/google/uuid v1.3.0
 	github.com/stripe/stripe-go/v74 v74.30.0
+	github.com/pgvector/pgvector-go v0.1.1
+	github.com/sashabaranov/go-openai v1.17.9
 )
 
 require (
