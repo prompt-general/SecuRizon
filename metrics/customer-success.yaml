@@ -1,0 +1,30 @@
+metrics:
+  acquisition:
+    - signups_per_day
+    - trial_to_paid_conversion_rate
+    - time_to_first_value
+    - onboarding_completion_rate
+    
+  engagement:
+    - daily_active_users
+    - weekly_active_users
+    - feature_adoption_rate
+    - api_calls_per_user
+    
+  retention:
+    - monthly_recurring_revenue
+    - churn_rate
+    - net_revenue_retention
+    - customer_lifetime_value
+    
+  satisfaction:
+    - net_promoter_score
+    - customer_satisfaction_score
+    - support_ticket_resolution_time
+    - knowledge_base_helpfulness
+    
+  success:
+    - health_score_average
+    - expansion_revenue
+    - quarterly_business_reviews_completed
+    - referenceable_customers
