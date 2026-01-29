@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/securizon/internal/email"
+	"github.com/securizon/internal/knowledgebase"
 	"github.com/securizon/internal/slack"
 	"github.com/securizon/internal/tenant"
 	"github.com/securizon/internal/user"
@@ -17,6 +18,7 @@ type SupportService struct {
 	ticketStore  TicketStore
 	tenantStore  tenant.Store
 	userStore    user.Store
+	kbService    *knowledgebase.KnowledgeBaseService
 	zendesk      *zendesk.Client
 	slack        *slack.Client
 	emailService *email.Service
@@ -75,6 +77,7 @@ func NewSupportService(
 	ticketStore TicketStore,
 	tenantStore tenant.Store,
 	userStore user.Store,
+	kbService *knowledgebase.KnowledgeBaseService,
 	zendesk *zendesk.Client,
 	slack *slack.Client,
 	emailService *email.Service,
@@ -84,6 +87,7 @@ func NewSupportService(
 		ticketStore:  ticketStore,
 		tenantStore:  tenantStore,
 		userStore:    userStore,
+		kbService:    kbService,
 		zendesk:      zendesk,
 		slack:        slack,
 		emailService: emailService,
@@ -227,45 +231,66 @@ func (ss *SupportService) AddComment(ctx context.Context, req *AddCommentRequest
 
 // GetKnowledgeBaseArticles returns relevant articles for a query
 func (ss *SupportService) GetKnowledgeBaseArticles(ctx context.Context, query string, category string, limit int) ([]Article, error) {
-	// Search vector database for relevant articles
-	articles, err := ss.searchArticles(ctx, query, category, limit)
+	if ss.kbService == nil {
+		return nil, fmt.Errorf("knowledge base service not initialized")
+	}
+
+	filters := map[string]interface{}{
+		"published": true,
+	}
+	if category != "" {
+		filters["category"] = category
+	}
+
+	results, err := ss.kbService.Search(ctx, query, filters)
 	if err != nil {
-		return nil, fmt.Errorf("failed to search articles: %v", err)
+		return nil, fmt.Errorf("failed to search knowledge base: %v", err)
 	}
 
 	// Get tenant context for personalized results
 	tenantCtx, _ := tenant.GetTenantContext(ctx)
-	if tenantCtx != nil {
-		// Filter articles based on tenant plan
-		articles = ss.filterArticlesByPlan(articles, tenantCtx.Plan)
+
+	articles := make([]Article, 0, len(results))
+	for _, res := range results {
+		// Filter articles based on tenant plan if applicable
+		if tenantCtx != nil {
+			if plan, ok := res.Article.Metadata["plan"].(string); ok && plan != "" {
+				if !ss.isPlanAllowed(tenantCtx.Plan, plan) {
+					continue
+				}
+			}
+		}
+
+		articles = append(articles, Article{
+			ID:       res.Article.ID,
+			Title:    res.Article.Title,
+			Content:  res.Article.Content,
+			Category: res.Article.Category,
+			Plan:     res.Article.Metadata["plan"].(string),
+		})
+
+		if len(articles) >= limit {
+			break
+		}
 	}
 
 	return articles, nil
 }
 
-// AutoSuggestTickets suggests similar tickets when creating a new one
-func (ss *SupportService) AutoSuggestTickets(ctx context.Context, subject, description string) ([]Ticket, error) {
-	// Use NLP to find similar tickets
-	similarTickets, err := ss.findSimilarTickets(ctx, subject, description)
+// AutoSuggestTickets suggests similar articles when creating a new ticket
+func (ss *SupportService) AutoSuggestTickets(ctx context.Context, subject, description string) ([]knowledgebase.SearchResult, error) {
+	if ss.kbService == nil {
+		return nil, nil
+	}
+
+	// Use KB service to suggest articles based on ticket content
+	results, err := ss.kbService.SmartSuggest(ctx, description, "incident", "")
 	if err != nil {
-		return nil, fmt.Errorf("failed to find similar tickets: %v", err)
+		log.Printf("Failed to get smart suggestions: %v", err)
+		return nil, nil
 	}
 
-	// Get tenant context
-	tenantCtx, err := tenant.GetTenantContext(ctx)
-	if err != nil {
-		return similarTickets, nil
-	}
-
-	// Filter to tenant's tickets only
-	var filtered []Ticket
-	for _, ticket := range similarTickets {
-		if ticket.TenantID == tenantCtx.TenantID {
-			filtered = append(filtered, ticket)
-		}
-	}
-
-	return filtered, nil
+	return results, nil
 }
 
 // SLA monitoring
@@ -376,16 +401,15 @@ func (ss *SupportService) notifyCommentAdded(t *Ticket, c *Comment, u *user.User
 	// Logic to notify user or support team
 }
 
-func (ss *SupportService) searchArticles(ctx context.Context, query, category string, limit int) ([]Article, error) {
-	return []Article{}, nil
-}
+func (ss *SupportService) isPlanAllowed(tenantPlan, articlePlan string) bool {
+	// Simple plan hierarchy: starter < pro < enterprise
+	plans := map[string]int{
+		"starter":    1,
+		"pro":        2,
+		"enterprise": 3,
+	}
 
-func (ss *SupportService) filterArticlesByPlan(articles []Article, plan string) []Article {
-	return articles
-}
-
-func (ss *SupportService) findSimilarTickets(ctx context.Context, subject, description string) ([]Ticket, error) {
-	return []Ticket{}, nil
+	return plans[tenantPlan] >= plans[articlePlan]
 }
 
 func (ss *SupportService) calculateDeadline(t *Ticket) time.Time {
